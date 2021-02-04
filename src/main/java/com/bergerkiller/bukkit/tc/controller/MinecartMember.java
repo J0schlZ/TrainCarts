@@ -984,11 +984,11 @@ public abstract class MinecartMember<T extends CommonMinecart<?>> extends Entity
     }
 
     /**
-     * Snaps a minecart onto a rail path, preserving the movement direction.
+     * Snaps the minecart onto a rail path, preserving the movement direction.
      * Can be used in rail logic pre/post-move to adjust and correct
      * position on the path.
      * 
-     * @param member to snap to this path
+     * @param path The path to snap this member onto
      */
     public void snapToPath(RailPath path) {
         if (!path.isEmpty()) {
@@ -998,7 +998,13 @@ public abstract class MinecartMember<T extends CommonMinecart<?>> extends Entity
         }
     }
 
-    private void snapToPosition(RailPath.Position position) {
+    /**
+     * Snaps the minecart onto a rail path position, using the new movement direction
+     * stored in the position.
+     *
+     * @param position The positiion to snap this member to
+     */
+    public void snapToPosition(RailPath.Position position) {
         position.assertAbsolute();
         double velocity = entity.vel.length();
         entity.setPosition(position.posX, position.posY, position.posZ);
@@ -2342,10 +2348,19 @@ public abstract class MinecartMember<T extends CommonMinecart<?>> extends Entity
      * @return click hitbox
      */
     public OrientedBoundingBox getHitBox() {
+        final Quaternion orientation = this.getOrientation();
+        final Vector position = this.getWheels().getPosition().clone();
+        final double height = 1.0;
+
+        // Bounding box position is relative to the center of the box
+        // We want it to be relative to the bottom. To make that happen,
+        // offset position upwards by half the height.
+        position.add(orientation.upVector().multiply(0.5 * height));
+
         OrientedBoundingBox box = new OrientedBoundingBox();
-        box.setPosition(this.getWheels().getPosition());
-        box.setSize(1.0, 1.0, entity.getWidth());
-        box.setOrientation(this.getOrientation());
+        box.setPosition(position);
+        box.setSize(1.0, height, entity.getWidth());
+        box.setOrientation(orientation);
         return box;
     }
 

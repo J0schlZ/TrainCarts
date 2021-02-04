@@ -4,7 +4,7 @@
 
     <groupId>com.bergerkiller.bukkit</groupId>
     <artifactId>TrainCarts</artifactId>
-    <version>1.16.5-v1-SNAPSHOT</version>
+    <version>1.16.5-v2-SNAPSHOT</version>
     <packaging>jar</packaging>
 
     <name>TrainCarts</name>
@@ -12,12 +12,12 @@
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <project.build.number>NO-CI</project.build.number>
         <project.mcversion>1.13.2</project.mcversion>
         <project.cbversion>${project.mcversion}-R0.1-SNAPSHOT</project.cbversion>
         <project.bkcversion>1.16.4-v3-SNAPSHOT</project.bkcversion>
         <project.slversion>1.11.2-v2-SNAPSHOT</project.slversion>
         <project.mwversion>1.11.2-v2-SNAPSHOT</project.mwversion>
-        <project.cibuild/>
         <junit.version>4.11</junit.version>
     </properties>
 
@@ -30,7 +30,7 @@
                 </property>
             </activation>
             <properties>
-                <project.cibuild>${env.BUILD_NUMBER}</project.cibuild>
+                <project.build.number>${env.BUILD_NUMBER}</project.build.number>
             </properties>
         </profile>
     </profiles>
@@ -200,6 +200,9 @@
 
     <!-- Build -->
     <build>
+        <!-- Export artifact with name that includes the build number -->
+        <finalName>${project.name}-${project.version}-${project.build.number}</finalName>
+
         <!-- Resources (the filtering allows us to use project properties in plugin.yml) -->
         <resources>
             <resource>
@@ -222,26 +225,7 @@
 
         <!-- Plugins -->
         <plugins>
-
-            <!-- Generate a jar containing the source javadoc -->
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-javadoc-plugin</artifactId>
-                <version>3.0.1</version>
-                <configuration>
-                    <failOnError>false</failOnError>
-                    <doclint>none</doclint>
-                    <quiet>true</quiet>
-                </configuration>
-            </plugin>
-            <!-- Generate a jar containing the java sources -->
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-source-plugin</artifactId>
-                <version>3.0.1</version>
-            </plugin>
-
-            <!-- Shade plugin -->
+            <!-- Shades dependencies into a final jar -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-shade-plugin</artifactId>
@@ -290,7 +274,7 @@
                 </executions>
             </plugin>
 
-            <!-- Clean up (this is to make testing easier) -->
+            <!-- Clean up original artifacts (this is to make testing easier) -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-clean-plugin</artifactId>
@@ -309,7 +293,6 @@
                                     <directory>${project.build.directory}</directory>
                                     <includes>
                                         <include>original-*.jar</include>
-                                        <include>*-shaded.jar</include>
                                     </includes>
                                     <followSymlinks>false</followSymlinks>
                                 </fileset>
@@ -334,11 +317,30 @@
                         </goals>
                         <configuration>
                             <target>
-                                <copy file="target/${project.name}-${project.version}.jar" tofile="target/static/${project.name}.jar"/>
+                                <copy file="target/${project.name}-${project.version}-${project.build.number}.jar" tofile="target/static/${project.name}.jar"/>
                             </target>
                         </configuration>
                     </execution>
                 </executions>
+            </plugin>
+
+            <!-- Generate a jar containing the source javadoc -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-javadoc-plugin</artifactId>
+                <version>3.0.1</version>
+                <configuration>
+                    <failOnError>false</failOnError>
+                    <doclint>none</doclint>
+                    <quiet>true</quiet>
+                </configuration>
+            </plugin>
+
+            <!-- Generate a jar containing the java sources -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-source-plugin</artifactId>
+                <version>3.0.1</version>
             </plugin>
 
             <!-- Compiler plugin -->

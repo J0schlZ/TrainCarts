@@ -1,5 +1,6 @@
 package com.bergerkiller.bukkit.tc;
 
+import java.util.ListIterator;
 import java.util.logging.Level;
 
 import com.bergerkiller.bukkit.common.entity.type.CommonMinecart;
@@ -12,12 +13,14 @@ import com.bergerkiller.bukkit.tc.controller.MinecartMemberStore;
 import com.bergerkiller.bukkit.tc.rails.logic.RailLogic;
 import com.bergerkiller.bukkit.tc.rails.logic.RailLogicVerticalSlopeNormalA;
 
+import org.bukkit.Bukkit;
 import org.bukkit.block.Block;
-import org.bukkit.entity.Entity;
-import org.bukkit.entity.LivingEntity;
-import org.bukkit.entity.Minecart;
-import org.bukkit.entity.Player;
+import org.bukkit.entity.*;
+import org.bukkit.entity.minecart.HopperMinecart;
+import org.bukkit.entity.minecart.StorageMinecart;
 import org.bukkit.event.entity.EntityDamageEvent.DamageCause;
+import org.bukkit.inventory.Inventory;
+import org.bukkit.inventory.ItemStack;
 import org.bukkit.util.Vector;
 
 /**
@@ -26,7 +29,8 @@ import org.bukkit.util.Vector;
 public enum CollisionMode {
     DEFAULT("is stopped by"), PUSH("pushes"), CANCEL("ignores"), KILL("kills"),
     KILLNODROPS("kills without drops"), ENTER("takes in"), LINK("forms a group with"),
-    DAMAGE("damages"), DAMAGENODROPS("damages without drops"), SKIP("do not process");
+    DAMAGE("damages"), DAMAGENODROPS("damages without drops"), SKIP("do not process"),
+    KILLEMPTY("kills empty"), KILLEMPTYMETOO("kills itself if empty and also empty");
 
     private final String operationName;
 
@@ -75,6 +79,8 @@ public enum CollisionMode {
     public boolean execute(MinecartMember<?> member, Entity entity) {
         final CommonMinecart<?> minecart = member.getEntity();
         final MinecartMember<?> other = MinecartMemberStore.getFromEntity(entity);
+        MinecartMember<?> oldKilledByMember = TCListener.killedByMember;
+
         // Some default exception rules
         if (!member.isInteractable() || entity.isDead() || member.isCollisionIgnored(entity)) {
             return false;
@@ -123,11 +129,11 @@ public enum CollisionMode {
                 double playerX = playerVelocity.getX();
                 double playerZ = playerVelocity.getZ();
 
-            /*
-             * Make sure the player is moving before comparing speeds and directions.
-             * If the player is not moving, then the train is running over the player,
-             * and fall through to the regular logic below.
-             */
+                /*
+                 * Make sure the player is moving before comparing speeds and directions.
+                 * If the player is not moving, then the train is running over the player,
+                 * and fall through to the regular logic below.
+                 */
                 if (Math.abs(playerX) + Math.abs(playerZ) > 0.03) {
                     if (Math.abs(trainX) + Math.abs(trainZ) < 0.03) {
                         // Train isn't moving (much if at all). Return true to let player push train.
@@ -155,6 +161,34 @@ public enum CollisionMode {
                 return false;
             case CANCEL:
                 return false;
+            case KILLEMPTY:
+            case KILLEMPTYMETOO:
+                boolean killOther = false;
+                if (other != null && !other.getGroup().hasItems() && !other.getGroup().hasPassenger()) {
+                    other.getGroup().destroy();
+                } else if (other == null) {
+                    if (entity.getType().equals(EntityType.MINECART_HOPPER) && !isEmpty(((StorageMinecart)entity).getInventory())) {
+                        killOther = true;
+                    } else if (entity.getType().equals(EntityType.MINECART_HOPPER) && !isEmpty(((HopperMinecart)entity).getInventory())) {
+                        killOther = true;
+                    } else if (entity.getType().equals(EntityType.MINECART) && entity.getPassengers().size() < 1) {
+                        killOther = true;
+                    }
+                }
+                if (killOther && member.isMoving() && member.isHeadingTo(entity)) {
+                    TCListener.cancelNextDrops = true;
+                    oldKilledByMember = TCListener.killedByMember;
+                    try {
+                        TCListener.killedByMember = member;
+                        damage(member, entity, 32767.0D);
+                    } finally {
+                        TCListener.killedByMember = oldKilledByMember;
+                    }
+                    TCListener.cancelNextDrops = false;
+                }
+                if (this == KILLEMPTYMETOO && !member.getGroup().hasPassenger() && !member.getGroup().hasItems())
+                    Bukkit.getScheduler().scheduleSyncDelayedTask(TrainCarts.plugin, () -> member.getGroup().destroy(), 1L);
+                return false;
             case DAMAGE:
             case DAMAGENODROPS:
                 if (member.isMoving() && member.isHeadingTo(entity)) {
@@ -176,7 +210,7 @@ public enum CollisionMode {
                         TCListener.cancelNextDrops = true;
                     }
 
-                    MinecartMember<?> oldKilledByMember = TCListener.killedByMember;
+                    oldKilledByMember = TCListener.killedByMember;
                     try {
                         TCListener.killedByMember = member;
                         damage(member, entity, (double) Short.MAX_VALUE);
@@ -233,6 +267,18 @@ public enum CollisionMode {
         } else {
             member.pushSideways(entity);
         }
+    }
+
+    /*
+     * Check if inventory is empty
+     */
+    private boolean isEmpty(Inventory inventory) {
+        for (ListIterator<ItemStack> listIterator = inventory.iterator(); listIterator.hasNext(); ) {
+            ItemStack stack = listIterator.next();
+            if (stack != null)
+                return false;
+        }
+        return true;
     }
 
     /*
